@@ -31,6 +31,7 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ message: "Party name is required" });
     }
 
+    const normalizedPartyName = partyName.trim().toLowerCase();
     const total = rows.reduce((acc, row) => acc + (Number(row.total) || 0), 0);
     const isPaid = status.toLowerCase() === "paid";
     const balance = isPaid ? 0 : total + Number(previousBalance) - Number(advance);
@@ -38,7 +39,7 @@ router.post("/", async (req, res) => {
 
     const bill = new Bill({
       serialNumber,
-      partyName: partyName.trim(),
+      partyName: normalizedPartyName,
       rows: rows.map((row) => ({
         id: Number(row.id) || 1,
         particulars: row.particulars?.trim() || "",
@@ -122,8 +123,7 @@ router.get("/id/:id", async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching bill by ID:", error);
-    const statusCode = error.message.includes("not found") ? 404 : 500;
-    res.status(statusCode).json({ message: error.message });
+    res.status(500).json({ message: "Failed to fetch bill", error: error.message });
   }
 });
 
@@ -131,18 +131,37 @@ router.get("/id/:id", async (req, res) => {
 router.get("/party/:partyName", async (req, res) => {
   try {
     const partyName = req.params.partyName?.trim();
+    const { exact = "false" } = req.query; // Allow exact match with ?exact=true
     if (!partyName) {
       return res.status(400).json({ message: "Party name is required" });
     }
 
-    const escapedName = escapeRegex(partyName);
+    console.debug(`Querying bills for party: "${partyName}", exact: ${exact}`);
 
-    // Aggregate to calculate total balance
+    const escapedName = escapeRegex(partyName);
+    const regexPattern = exact === "true" ? `^${escapedName}$` : escapedName;
+    const bills = await Bill.find({
+      partyName: { $regex: regexPattern, $options: "i" },
+    })
+      .sort({ date: -1 })
+      .lean();
+
+    if (!bills.length) {
+      console.debug(`No bills found for party: "${partyName}"`);
+      return res.status(404).json({
+        message: `No bills found for party "${partyName}"`,
+        partyName,
+        balance: 0,
+        matchedPartyNames: [],
+      });
+    }
+
+    // Aggregate balance for non-paid bills
     const balanceAggregation = await Bill.aggregate([
       {
         $match: {
-          partyName: { $regex: `^${escapedName}$`, $options: "i" },
-          status: { $ne: "paid" }, // Exclude paid bills from balance calculation
+          partyName: { $regex: regexPattern, $options: "i" },
+          status: { $ne: "paid" },
         },
       },
       {
@@ -154,30 +173,23 @@ router.get("/party/:partyName", async (req, res) => {
     ]);
 
     const totalBalance = balanceAggregation[0]?.totalBalance || 0;
+    const latestBill = bills[0];
+    const matchedPartyNames = [...new Set(bills.map((bill) => bill.partyName))];
 
-    // Fetch the latest bill for reference
-    const latestBill = await Bill.findOne({
-      partyName: { $regex: `^${escapedName}$`, $options: "i" },
-    })
-      .sort({ date: -1 })
-      .lean();
-
-    if (!latestBill) {
-      return res.status(404).json({
-        message: "No bills found for this party",
-        partyName,
-        balance: 0,
-      });
-    }
+    console.debug(`Found ${bills.length} bills for party "${partyName}", balance: ${totalBalance}, matched names:`, matchedPartyNames);
 
     res.json({
       ...latestBill,
       date: latestBill.date ? new Date(latestBill.date).toISOString().split("T")[0] : "",
-      balance: totalBalance, // Override with cumulative balance
+      balance: totalBalance,
+      matchedPartyNames,
     });
   } catch (error) {
-    console.error("Error fetching party bills:", error);
-    res.status(500).json({ message: "Failed to fetch party bills", error: error.message });
+    console.error(`Error fetching bills for party "${req.params.partyName}":`, error);
+    res.status(500).json({
+      message: `Failed to fetch bills for party "${req.params.partyName}"`,
+      error: error.message,
+    });
   }
 });
 
@@ -216,12 +228,13 @@ router.put("/id/:id", async (req, res) => {
       return res.status(400).json({ message: "Party name is required" });
     }
 
+    const normalizedPartyName = partyName.trim().toLowerCase();
     const total = rows.reduce((acc, row) => acc + (Number(row.total) || 0), 0);
     const isPaid = status.toLowerCase() === "paid";
     const balance = isPaid ? 0 : total - Number(advance);
 
     const updateData = {
-      partyName: partyName.trim(),
+      partyName: normalizedPartyName,
       rows: rows.map((row) => ({
         id: Number(row.id) || 1,
         particulars: row.particulars?.trim() || "",
