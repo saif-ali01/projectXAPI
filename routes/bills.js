@@ -8,7 +8,7 @@ const getNextSerialNumber = async () => {
   const lastBill = await Bill.findOne().sort({ serialNumber: -1 });
   return lastBill ? lastBill.serialNumber + 1 : 1;
 };
-
+// Create bill
 // Create bill
 router.post("/", async (req, res) => {
   try {
@@ -19,7 +19,7 @@ router.post("/", async (req, res) => {
 
     const bill = new Bill({
       serialNumber,
-      partyName,
+      partyName: partyName.trim(),
       rows: rows.map(row => ({
         ...row,
         id: Number(row.id) || 1,
@@ -131,24 +131,40 @@ router.get("/id/:id", async (req, res) => {
 // Get the latest bill by party name (case-insensitive exact match)
 router.get("/party/:partyName", async (req, res) => {
   try {
-    const partyName = req.params.partyName.trim();
+    const rawName = req.params.partyName;
+    const partyName = rawName ? rawName.trim() : "";
+    
     if (!partyName) {
       return res.status(400).json({ message: "Party name is required" });
     }
-    const bill = await Bill.findOne({ partyName: { $regex: `^${partyName}$`, $options: "i" } })
-      .sort({ date: -1 })
-      .lean();
+
+    const escapedName = escapeRegex(partyName);
+    const bill = await Bill.findOne({ 
+      partyName: { 
+        $regex: `^${escapedName}$`,
+        $options: "i" 
+      }
+    })
+    .sort({ date: -1 })
+    .lean();
+
     if (!bill) {
-      console.log(`No bill found for partyName: "${partyName}"`);
-      return res.status(404).json({ message: "No bill found for this party" });
+      return res.status(404).json({ 
+        message: "No bill found for this party",
+        searchedName: partyName
+      });
     }
+
     res.json({
       ...bill,
       date: bill.date ? new Date(bill.date).toISOString().split("T")[0] : "",
     });
   } catch (error) {
     console.error("Error fetching latest bill by party:", error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ 
+      message: error.message,
+      receivedName: req.params.partyName
+    });
   }
 });
 
