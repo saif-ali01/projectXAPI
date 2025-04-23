@@ -136,9 +136,10 @@ router.get("/party/:partyName", async (req, res) => {
       return res.status(400).json({ message: "Party name is required" });
     }
 
-    console.debug(`Querying bills for party: "${partyName}", exact: ${exact}`);
+    const normalizedPartyName = partyName.toLowerCase();
+    console.debug(`Querying bills for party: "${normalizedPartyName}", exact: ${exact}`);
 
-    const escapedName = escapeRegex(partyName);
+    const escapedName = escapeRegex(normalizedPartyName);
     const regexPattern = exact === "true" ? `^${escapedName}$` : escapedName;
     const bills = await Bill.find({
       partyName: { $regex: regexPattern, $options: "i" },
@@ -147,7 +148,7 @@ router.get("/party/:partyName", async (req, res) => {
       .lean();
 
     if (!bills.length) {
-      console.debug(`No bills found for party: "${partyName}"`);
+      console.debug(`No bills found for party: "${normalizedPartyName}"`);
       return res.status(404).json({
         message: `No bills found for party "${partyName}"`,
         partyName,
@@ -176,7 +177,7 @@ router.get("/party/:partyName", async (req, res) => {
     const matchedPartyNames = [...new Set(bills.map((bill) => bill.partyName))];
 
     console.debug(
-      `Found ${bills.length} bills for party "${partyName}", balance: ${totalBalance}, matched names:`,
+      `Found ${bills.length} bills for party "${normalizedPartyName}", balance: ${totalBalance}, matched names:`,
       matchedPartyNames
     );
 
@@ -352,8 +353,11 @@ router.get("/parties", async (req, res) => {
       console.debug("No party names found");
       return res.status(200).json([]);
     }
-    console.debug(`Found ${parties.length} unique party names:`, parties);
-    res.json(parties);
+    // Normalize party names for consistency
+    const normalizedParties = parties.map((name) => name.toLowerCase());
+    const uniqueParties = [...new Set(normalizedParties)];
+    console.debug(`Found ${uniqueParties.length} unique party names:`, uniqueParties);
+    res.json(uniqueParties);
   } catch (error) {
     console.error("Error fetching party names:", error);
     res.status(500).json({ message: "Failed to fetch party names", error: error.message });
