@@ -128,16 +128,23 @@ router.get("/id/:id", async (req, res) => {
   }
 });
 
-// Get the latest bill by party name
+// Get the latest bill by party name (exact match)
 router.get("/party/:partyName", async (req, res) => {
   try {
-    const bill = await Bill.findOne({ partyName: req.params.partyName })
+    const partyName = req.params.partyName.trim();
+    if (!partyName) {
+      return res.status(400).json({ message: "Party name is required" });
+    }
+    const bill = await Bill.findOne({ partyName })
       .sort({ date: -1 })
       .lean();
     if (!bill) {
       return res.status(404).json({ message: "No bill found for this party" });
     }
-    res.json(bill);
+    res.json({
+      ...bill,
+      date: bill.date ? new Date(bill.date).toISOString().split("T")[0] : "",
+    });
   } catch (error) {
     console.error("Error fetching latest bill by party:", error);
     res.status(500).json({ message: error.message });
