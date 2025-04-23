@@ -131,7 +131,7 @@ router.get("/id/:id", async (req, res) => {
 router.get("/party/:partyName", async (req, res) => {
   try {
     const partyName = req.params.partyName?.trim();
-    const { exact = "false" } = req.query; // Allow exact match with ?exact=true
+    const { exact = "false" } = req.query;
     if (!partyName) {
       return res.status(400).json({ message: "Party name is required" });
     }
@@ -156,7 +156,6 @@ router.get("/party/:partyName", async (req, res) => {
       });
     }
 
-    // Aggregate balance for non-paid bills
     const balanceAggregation = await Bill.aggregate([
       {
         $match: {
@@ -176,7 +175,10 @@ router.get("/party/:partyName", async (req, res) => {
     const latestBill = bills[0];
     const matchedPartyNames = [...new Set(bills.map((bill) => bill.partyName))];
 
-    console.debug(`Found ${bills.length} bills for party "${partyName}", balance: ${totalBalance}, matched names:`, matchedPartyNames);
+    console.debug(
+      `Found ${bills.length} bills for party "${partyName}", balance: ${totalBalance}, matched names:`,
+      matchedPartyNames
+    );
 
     res.json({
       ...latestBill,
@@ -315,7 +317,6 @@ router.get("/stats", async (req, res) => {
       { $sort: { _id: 1 } },
     ]);
 
-    // Fill missing periods
     const dateRange = [];
     let currentDate = new Date(start);
     while (currentDate <= end) {
@@ -339,6 +340,23 @@ router.get("/stats", async (req, res) => {
   } catch (error) {
     console.error("Error fetching bill stats:", error);
     res.status(500).json({ message: "Failed to fetch stats", error: error.message });
+  }
+});
+
+// Get unique party names for autocomplete
+router.get("/parties", async (req, res) => {
+  try {
+    console.debug("Fetching unique party names");
+    const parties = await Bill.distinct("partyName");
+    if (!parties.length) {
+      console.debug("No party names found");
+      return res.status(200).json([]);
+    }
+    console.debug(`Found ${parties.length} unique party names:`, parties);
+    res.json(parties);
+  } catch (error) {
+    console.error("Error fetching party names:", error);
+    res.status(500).json({ message: "Failed to fetch party names", error: error.message });
   }
 });
 
