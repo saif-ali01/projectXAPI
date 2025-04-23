@@ -128,17 +128,18 @@ router.get("/id/:id", async (req, res) => {
   }
 });
 
-// Get the latest bill by party name (exact match)
+// Get the latest bill by party name (case-insensitive exact match)
 router.get("/party/:partyName", async (req, res) => {
   try {
     const partyName = req.params.partyName.trim();
     if (!partyName) {
       return res.status(400).json({ message: "Party name is required" });
     }
-    const bill = await Bill.findOne({ partyName })
+    const bill = await Bill.findOne({ partyName: { $regex: `^${partyName}$`, $options: "i" } })
       .sort({ date: -1 })
       .lean();
     if (!bill) {
+      console.log(`No bill found for partyName: "${partyName}"`);
       return res.status(404).json({ message: "No bill found for this party" });
     }
     res.json({
