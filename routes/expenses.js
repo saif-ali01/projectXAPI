@@ -196,7 +196,7 @@ router.get("/transactions", async (req, res) => {
   }
 });
 
-// Get earnings
+// Update the GET /earnings route
 router.get("/earnings", async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
@@ -205,13 +205,22 @@ router.get("/earnings", async (req, res) => {
       query.date = { $gte: new Date(startDate), $lte: new Date(endDate) };
     }
 
-    const earnings = await Earnings.find(query).lean();
+    const earnings = await Earnings.find(query)
+      .populate("reference", "serialNumber partyName total")
+      .lean();
+
     res.json(
       earnings.map((e) => ({
         id: e._id,
         date: e.date,
         amount: e.amount,
         type: e.type,
+        source: e.source,
+        bill: e.reference ? {
+          serialNumber: e.reference.serialNumber,
+          partyName: e.reference.partyName,
+          total: e.reference.total
+        } : null
       }))
     );
   } catch (error) {

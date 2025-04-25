@@ -1,4 +1,4 @@
-// models/Earnings.js
+// models/Earning.js
 const mongoose = require("mongoose");
 
 const earningsSchema = new mongoose.Schema({
@@ -16,6 +16,14 @@ const earningsSchema = new mongoose.Schema({
     enum: ["Sales", "Investment", "Other"],
     required: true,
   },
+  source: {
+    type: String,
+    required: true,
+  },
+  reference: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Bill",
+  }
 });
 
 module.exports = mongoose.model("Earnings", earningsSchema);

@@ -231,6 +231,10 @@ router.put("/id/:id", async (req, res) => {
       return res.status(400).json({ message: "Party name is required" });
     }
 
+    // Get previous bill state
+    const previousBill = await Bill.findById(req.params.id);
+    const wasPaid = previousBill.status === "paid";
+    
     const normalizedPartyName = partyName.trim().toLowerCase();
     const total = rows.reduce((acc, row) => acc + (Number(row.total) || 0), 0);
     const isPaid = status.toLowerCase() === "paid";
@@ -266,6 +270,18 @@ router.put("/id/:id", async (req, res) => {
       return res.status(404).json({ message: "Bill not found" });
     }
 
+    // Add to earnings if newly paid
+    if (!wasPaid && isPaid) {
+      const earning = new Earnings({
+        date: new Date(),
+        amount: total,
+        type: "Sales",
+        source: `Bill #${bill.serialNumber}`,
+        reference: bill._id
+      });
+      await earning.save();
+    }
+
     res.json({
       ...bill,
       date: bill.date ? new Date(bill.date).toISOString().split("T")[0] : "",
@@ -275,6 +291,7 @@ router.put("/id/:id", async (req, res) => {
     res.status(400).json({ message: error.message });
   }
 });
+
 
 // Delete a bill
 router.delete("/id/:id", async (req, res) => {
