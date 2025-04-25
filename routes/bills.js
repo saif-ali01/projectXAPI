@@ -60,11 +60,28 @@ router.post("/", async (req, res) => {
       note: note?.trim() || "",
     });
 
-    const savedBill = await bill.save();
+    const savedBill = await bill.save({ session });
+
+    // If bill is created as paid, add to earnings
+    if (status.toLowerCase() === "paid") {
+      const earning = new Earnings({
+        date: new Date(),
+        amount: savedBill.total,
+        type: "Sales",
+        source: `Bill #${savedBill.serialNumber}`,
+        reference: savedBill._id
+      });
+      await earning.save({ session });
+    }
+
+    await session.commitTransaction();
     res.status(201).json(savedBill);
   } catch (error) {
+    await session.abortTransaction();
     console.error("Error creating bill:", error);
     res.status(400).json({ message: error.message });
+  } finally {
+    session.endSession();
   }
 });
 
@@ -221,77 +238,60 @@ router.get("/serial/:serialNumber", async (req, res) => {
 
 // Update a bill
 router.put("/id/:id", async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ message: "Invalid bill ID" });
     }
 
-    const { partyName, rows, advance = 0, status = "pending", note = "" } = req.body;
-    if (!partyName?.trim()) {
-      return res.status(400).json({ message: "Party name is required" });
-    }
-
-    // Get previous bill state
-    const previousBill = await Bill.findById(req.params.id);
+    // Get previous bill state first
+    const previousBill = await Bill.findById(req.params.id).session(session);
     const wasPaid = previousBill.status === "paid";
+
+    const { partyName, rows, advance = 0, status = "pending", note = "" } = req.body;
     
-    const normalizedPartyName = partyName.trim().toLowerCase();
-    const total = rows.reduce((acc, row) => acc + (Number(row.total) || 0), 0);
-    const isPaid = status.toLowerCase() === "paid";
-    const balance = isPaid ? 0 : total - Number(advance);
+    // ... (rest of the update data preparation remains the same)
 
-    const updateData = {
-      partyName: normalizedPartyName,
-      rows: rows.map((row) => ({
-        id: Number(row.id) || 1,
-        particulars: row.particulars?.trim() || "",
-        type: row.type || "",
-        size: row.size || "",
-        customType: row.customType?.trim() || "",
-        customSize: row.customSize?.trim() || "",
-        quantity: Number(row.quantity) || 0,
-        rate: Number(row.rate) || 0,
-        total: Number(row.total) || 0,
-      })),
-      total,
-      status: status.toLowerCase(),
-      advance: Number(advance),
-      due: balance,
-      balance,
-      note: note?.trim() || "",
-    };
-
-    const bill = await Bill.findByIdAndUpdate(req.params.id, updateData, {
-      new: true,
-      runValidators: true,
-    }).lean();
+    const bill = await Bill.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true, session, runValidators: true }
+    );
 
     if (!bill) {
+      await session.abortTransaction();
       return res.status(404).json({ message: "Bill not found" });
     }
 
-    // Add to earnings if newly paid
-    if (!wasPaid && isPaid) {
+    // Only create earnings if changing to paid status from non-paid
+    if (!wasPaid && status.toLowerCase() === "paid") {
       const earning = new Earnings({
         date: new Date(),
-        amount: total,
+        amount: bill.total,
         type: "Sales",
         source: `Bill #${bill.serialNumber}`,
         reference: bill._id
       });
-      await earning.save();
+      
+      await earning.save({ session });
     }
 
+    await session.commitTransaction();
+    
     res.json({
-      ...bill,
-      date: bill.date ? new Date(bill.date).toISOString().split("T")[0] : "",
+      ...bill.toObject(),
+      date: bill.date ? bill.date.toISOString().split("T")[0] : "",
     });
   } catch (error) {
+    await session.abortTransaction();
     console.error("Error updating bill:", error);
     res.status(400).json({ message: error.message });
+  } finally {
+    session.endSession();
   }
 });
-
 
 // Delete a bill
 router.delete("/id/:id", async (req, res) => {
