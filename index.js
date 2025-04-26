@@ -4,6 +4,8 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const bills = require("./routes/bills");
 const expensesRouter = require("./routes/expenses");
+const partyRoutes = require("./routes/parties"); // From previous
+const dashboardRoutes = require("./routes/dashboard");
 const authRoutes = require("./routes/authRoutes");
 const reportRoutes = require("./routes/reportRoutes");
 
@@ -21,6 +23,8 @@ app.use(express.json());
 // Routes
 app.use("/api/bills", bills);
 app.use("/api/expenses", expensesRouter);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/parties", partyRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/reports", reportRoutes);
 
