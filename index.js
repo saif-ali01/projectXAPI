@@ -6,6 +6,7 @@ const bills = require("./routes/bills");
 const expensesRouter = require("./routes/expenses");
 const partyRoutes = require("./routes/parties"); // From previous
 const dashboardRoutes = require("./routes/dashboard");
+const authRoutes = require("./routes/authRoutes");
 const reportRoutes = require("./routes/reportRoutes");
 
 dotenv.config();
