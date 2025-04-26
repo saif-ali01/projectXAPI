@@ -176,7 +176,7 @@ router.get("/party/:partyName", async (req, res) => {
       .lean();
 
     if (!bills.length) {
-      returnADE res.status(404).json({
+      return res.status(404).json({
         message: `No bills found for party "${partyName}"`,
         partyName,
         balance: 0,
