@@ -2,10 +2,10 @@ const express = require("express");
 const router = express.Router();
 const Party = require("../models/Party");
 
-// Get all parties for the authenticated user
-router.get("/",   async (req, res) => {
+// Get all parties
+router.get("/", async (req, res) => {
   try {
-    const parties = await Party.find({ createdBy: req.user.id }).sort({ name: 1 });
+    const parties = await Party.find().sort({ name: 1 });
     res.json(parties);
   } catch (error) {
     console.error("Error fetching parties:", error);
@@ -14,12 +14,9 @@ router.get("/",   async (req, res) => {
 });
 
 // Get a single party by ID
-router.get("/:id",   async (req, res) => {
+router.get("/:id", async (req, res) => {
   try {
-    const party = await Party.findOne({
-      _id: req.params.id,
-      createdBy: req.user.id,
-    });
+    const party = await Party.findById(req.params.id);
     if (!party) {
       return res.status(404).json({ message: "Party not found" });
     }
@@ -31,7 +28,7 @@ router.get("/:id",   async (req, res) => {
 });
 
 // Create a new party
-router.post("/",   async (req, res) => {
+router.post("/", async (req, res) => {
   try {
     const { name, contact, address } = req.body;
     if (!name?.trim()) {
@@ -42,7 +39,7 @@ router.post("/",   async (req, res) => {
       name: name.trim(),
       contact: contact?.trim() || "",
       address: address?.trim() || "",
-      createdBy: req.user.id,
+      // createdBy is optional; omit if not needed or set to null
     });
 
     await party.save();
@@ -58,15 +55,15 @@ router.post("/",   async (req, res) => {
 });
 
 // Update a party
-router.put("/:id",   async (req, res) => {
+router.put("/:id", async (req, res) => {
   try {
     const { name, contact, address } = req.body;
     if (!name?.trim()) {
       return res.status(400).json({ message: "Party name is required" });
     }
 
-    const party = await Party.findOneAndUpdate(
-      { _id: req.params.id, createdBy: req.user.id },
+    const party = await Party.findByIdAndUpdate(
+      req.params.id,
       {
         name: name.trim(),
         contact: contact?.trim() || "",
@@ -91,12 +88,9 @@ router.put("/:id",   async (req, res) => {
 });
 
 // Delete a party
-router.delete("/:id",   async (req, res) => {
+router.delete("/:id", async (req, res) => {
   try {
-    const party = await Party.findOneAndDelete({
-      _id: req.params.id,
-      createdBy: req.user.id,
-    });
+    const party = await Party.findByIdAndDelete(req.params.id);
     if (!party) {
       return res.status(404).json({ message: "Party not found" });
     }
