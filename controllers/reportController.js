@@ -1,50 +1,61 @@
+// controllers/reportController.js
 const Transaction = require("../models/Transaction");
+const { isValidDate } = require("../utils/helpers");
 
 const getReports = async (req, res) => {
-  const { startDate, endDate, type } = req.query;
-
-  // Validate query parameters
-  if (!startDate || !endDate || !type) {
-    return res.status(400).json({ message: "Missing required query parameters" });
-  }
-
   try {
+    const { startDate, endDate, type } = req.query;
+
+    // Validate input parameters
+    if (!startDate || !endDate || !type) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required parameters: startDate, endDate, type",
+      });
+    }
+
+    if (!["category", "monthly", "yearly"].includes(type)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid report type. Valid values: category, monthly, yearly",
+      });
+    }
+
     const start = new Date(startDate);
     const end = new Date(endDate);
 
-    // Validate dates
-    if (isNaN(start) || isNaN(end)) {
-      return res.status(400).json({ message: "Invalid date format" });
+    if (!isValidDate(start) || !isValidDate(end)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format. Use ISO format (YYYY-MM-DD)",
+      });
     }
 
-    let reportData = [];
+    if (start > end) {
+      return res.status(400).json({
+        success: false,
+        message: "Start date must be before end date",
+      });
+    }
 
     const matchStage = {
       date: { $gte: start, $lte: end },
     };
 
+    let pipeline;
+
     switch (type) {
       case "category":
-        reportData = await Transaction.aggregate([
+        pipeline = [
           { $match: matchStage },
-          {
-            $group: {
-              _id: "$category",
-              total: { $sum: "$amount" },
-            },
-          },
-          {
-            $project: {
-              category: "$_id",
-              total: 1,
-              _id: 0,
-            },
-          },
-        ]);
+          { $group: { _id: "$category", total: { $sum: "$amount" } } },
+          { $project: { _id: 0, category: "$_id", total: 1 } },
+          { $sort: { total: -1 } },
+        ];
         break;
 
       case "monthly":
-        reportData = await Transaction.aggregate([
+        pipeline = [
           { $match: matchStage },
           {
             $group: {
@@ -57,23 +68,28 @@ const getReports = async (req, res) => {
           },
           {
             $project: {
+              _id: 0,
               month: {
-                $concat: [
-                  { $toString: "$_id.month" },
-                  "/",
-                  { $toString: "$_id.year" },
-                ],
+                $dateToString: {
+                  format: "%Y-%m",
+                  date: {
+                    $dateFromParts: {
+                      year: "$_id.year",
+                      month: "$_id.month",
+                      day: 1,
+                    },
+                  },
+                },
               },
               total: 1,
-              _id: 0,
             },
           },
-          { $sort: { "_id.year": 1, "_id.month": 1 } },
-        ]);
+          { $sort: { month: 1 } },
+        ];
         break;
 
       case "yearly":
-        reportData = await Transaction.aggregate([
+        pipeline = [
           { $match: matchStage },
           {
             $group: {
@@ -81,26 +97,41 @@ const getReports = async (req, res) => {
               total: { $sum: "$amount" },
             },
           },
-          {
-            $project: {
-              year: "$_id",
-              total: 1,
-              _id: 0,
-            },
-          },
+          { $project: { _id: 0, year: "$_id", total: 1 } },
           { $sort: { year: 1 } },
-        ]);
+        ];
         break;
-
-      default:
-        return res.status(400).json({ message: "Invalid report type" });
     }
 
-    return res.json(reportData);
+    const reportData = await Transaction.aggregate(pipeline);
+
+    if (reportData.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No transactions found in the selected date range",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: reportData,
+      meta: {
+        startDate: start.toISOString().split("T")[0],
+        endDate: end.toISOString().split("T")[0],
+        reportType: type,
+        count: reportData.length,
+      },
+    });
   } catch (error) {
-    console.error("Error generating report:", error);
-    return res.status(500).json({ message: "Server error" });
+    console.error("Report generation error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to generate report",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
   }
 };
 
-module.exports = { getReports };
+module.exports = {
+  getReports,
+};
