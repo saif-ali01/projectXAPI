@@ -3,7 +3,7 @@ const express = require("express");
 const router = express.Router();
 const Bill = require("../models/Bill");
 const Expense = require("../models/Expense");
-const Earnings = require("../models/Earnings");
+const Earnings = require("../models/Earning");
 const Party = require("../models/Party");
 
 // Improved error handling middleware
