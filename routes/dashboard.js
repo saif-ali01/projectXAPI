@@ -3,7 +3,7 @@ const router = express.Router();
 const mongoose = require("mongoose");
 const Bill = require("../models/Bill");
 const Expense = require("../models/Expense");
-const Earnings = require("../models/Earnings");
+const Earnings = require("../models/Earning");
 const Party = require("../models/Party");
 
 // Error handling middleware
