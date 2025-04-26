@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Expense = require("../models/Expense");
-const Earnings = require("../models/Earning");
+const Earnings = require("../models/Earnings");
 
 // Get expense summary
 router.get("/summary", async (req, res) => {
@@ -23,8 +23,7 @@ router.get("/summary", async (req, res) => {
     ]);
 
     const totalPersonal = summary.find((s) => s._id === "Personal")?.total || 0;
-    const totalProfessional =
-      summary.find((s) => s._id === "Professional")?.total || 0;
+    const totalProfessional = summary.find((s) => s._id === "Professional")?.total || 0;
     const totalBudget = 200000; // Example budget
     const budgetUsed = ((totalPersonal + totalProfessional) / totalBudget) * 100;
 
@@ -157,14 +156,7 @@ router.get("/categories", async (req, res) => {
 // Get recent transactions
 router.get("/transactions", async (req, res) => {
   try {
-    const {
-      startDate,
-      endDate,
-      sortBy = "date",
-      order = "desc",
-      category,
-      type,
-    } = req.query;
+    const { startDate, endDate, sortBy = "date", order = "desc", category, type } = req.query;
     const query = {};
     if (startDate && endDate) {
       query.date = { $gte: new Date(startDate), $lte: new Date(endDate) };
@@ -196,7 +188,7 @@ router.get("/transactions", async (req, res) => {
   }
 });
 
-// Update the GET /earnings route
+// Get earnings
 router.get("/earnings", async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
@@ -216,11 +208,13 @@ router.get("/earnings", async (req, res) => {
         amount: e.amount,
         type: e.type,
         source: e.source,
-        bill: e.reference ? {
-          serialNumber: e.reference.serialNumber,
-          partyName: e.reference.partyName,
-          total: e.reference.total
-        } : null
+        bill: e.reference
+          ? {
+              serialNumber: e.reference.serialNumber,
+              partyName: e.reference.partyName,
+              total: e.reference.total,
+            }
+          : null,
       }))
     );
   } catch (error) {
@@ -290,11 +284,13 @@ router.delete("/:id", async (req, res) => {
 // Create earnings (for testing)
 router.post("/earnings", async (req, res) => {
   try {
-    const { date, amount, type } = req.body;
+    const { date, amount, type, source, reference } = req.body;
     const earnings = new Earnings({
       date: new Date(date),
       amount,
       type,
+      source,
+      reference,
     });
     const savedEarnings = await earnings.save();
     res.status(201).json(savedEarnings);

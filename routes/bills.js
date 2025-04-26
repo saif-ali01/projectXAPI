@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Bill = require("../models/Bill");
+const Earnings = require("../models/Earnings");
 const mongoose = require("mongoose");
 
 // Utility to escape regex characters
@@ -16,6 +17,9 @@ const getNextSerialNumber = async () => {
 
 // Create bill
 router.post("/", async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const {
       partyName,
@@ -29,6 +33,10 @@ router.post("/", async (req, res) => {
 
     if (!partyName?.trim()) {
       return res.status(400).json({ message: "Party name is required" });
+    }
+
+    if (!rows || !Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ message: "At least one row is required" });
     }
 
     const normalizedPartyName = partyName.trim().toLowerCase();
@@ -63,13 +71,13 @@ router.post("/", async (req, res) => {
     const savedBill = await bill.save({ session });
 
     // If bill is created as paid, add to earnings
-    if (status.toLowerCase() === "paid") {
+    if (isPaid) {
       const earning = new Earnings({
         date: new Date(),
         amount: savedBill.total,
         type: "Sales",
         source: `Bill #${savedBill.serialNumber}`,
-        reference: savedBill._id
+        reference: savedBill._id,
       });
       await earning.save({ session });
     }
@@ -154,8 +162,6 @@ router.get("/party/:partyName", async (req, res) => {
     }
 
     const normalizedPartyName = partyName.toLowerCase();
-    console.debug(`Querying bills for party: "${normalizedPartyName}", exact: ${exact}`);
-
     const escapedName = escapeRegex(normalizedPartyName);
     const regexPattern = exact === "true" ? `^${escapedName}$` : escapedName;
     const bills = await Bill.find({
@@ -165,7 +171,6 @@ router.get("/party/:partyName", async (req, res) => {
       .lean();
 
     if (!bills.length) {
-      console.debug(`No bills found for party: "${normalizedPartyName}"`);
       return res.status(404).json({
         message: `No bills found for party "${partyName}"`,
         partyName,
@@ -192,11 +197,6 @@ router.get("/party/:partyName", async (req, res) => {
     const totalBalance = balanceAggregation[0]?.totalBalance || 0;
     const latestBill = bills[0];
     const matchedPartyNames = [...new Set(bills.map((bill) => bill.partyName))];
-
-    console.debug(
-      `Found ${bills.length} bills for party "${normalizedPartyName}", balance: ${totalBalance}, matched names:`,
-      matchedPartyNames
-    );
 
     res.json({
       ...latestBill,
@@ -240,46 +240,95 @@ router.get("/serial/:serialNumber", async (req, res) => {
 router.put("/id/:id", async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
-  
+
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ message: "Invalid bill ID" });
     }
 
-    // Get previous bill state first
+    // Get previous bill state
     const previousBill = await Bill.findById(req.params.id).session(session);
-    const wasPaid = previousBill.status === "paid";
-
-    const { partyName, rows, advance = 0, status = "pending", note = "" } = req.body;
-    
-    // ... (rest of the update data preparation remains the same)
-
-    const bill = await Bill.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true, session, runValidators: true }
-    );
-
-    if (!bill) {
+    if (!previousBill) {
       await session.abortTransaction();
       return res.status(404).json({ message: "Bill not found" });
     }
+    const wasPaid = previousBill.status === "paid";
 
-    // Only create earnings if changing to paid status from non-paid
-    if (!wasPaid && status.toLowerCase() === "paid") {
+    const {
+      partyName,
+      rows,
+      advance = 0,
+      status = "pending",
+      note = "",
+      due = 0,
+      previousBalance = 0,
+    } = req.body;
+
+    if (!partyName?.trim()) {
+      return res.status(400).json({ message: "Party name is required" });
+    }
+
+    if (!rows || !Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ message: "At least one row is required" });
+    }
+
+    const normalizedPartyName = partyName.trim().toLowerCase();
+    const total = rows.reduce((acc, row) => acc + (Number(row.total) || 0), 0);
+    const isPaid = status.toLowerCase() === "paid";
+    const balance = isPaid ? 0 : total + Number(previousBalance) - Number(advance);
+
+    const updateData = {
+      partyName: normalizedPartyName,
+      rows: rows.map((row) => ({
+        id: Number(row.id) || 1,
+        particulars: row.particulars?.trim() || "",
+        type: row.type || "",
+        size: row.size || "",
+        customType: row.customType?.trim() || "",
+        customSize: row.customSize?.trim() || "",
+        quantity: Number(row.quantity) || 0,
+        rate: Number(row.rate) || 0,
+        total: Number(row.total) || 0,
+      })),
+      total,
+      advance: Number(advance),
+      balance,
+      due: isPaid ? 0 : Number(due),
+      previousBalance: Number(previousBalance),
+      status: status.toLowerCase(),
+      note: note?.trim() || "",
+    };
+
+    const bill = await Bill.findByIdAndUpdate(req.params.id, updateData, {
+      new: true,
+      session,
+      runValidators: true,
+    });
+
+    // Handle earnings
+    if (!wasPaid && isPaid) {
+      // Create new earnings entry if bill is newly marked as paid
       const earning = new Earnings({
         date: new Date(),
         amount: bill.total,
         type: "Sales",
         source: `Bill #${bill.serialNumber}`,
-        reference: bill._id
+        reference: bill._id,
       });
-      
       await earning.save({ session });
+    } else if (wasPaid && !isPaid) {
+      // Remove earnings entry if bill is changed from paid to non-paid
+      await Earnings.deleteOne({ reference: bill._id }).session(session);
+    } else if (wasPaid && isPaid) {
+      // Update existing earnings if bill remains paid but total changes
+      await Earnings.findOneAndUpdate(
+        { reference: bill._id },
+        { amount: bill.total, date: new Date() },
+        { session }
+      );
     }
 
     await session.commitTransaction();
-    
     res.json({
       ...bill.toObject(),
       date: bill.date ? bill.date.toISOString().split("T")[0] : "",
@@ -295,20 +344,33 @@ router.put("/id/:id", async (req, res) => {
 
 // Delete a bill
 router.delete("/id/:id", async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ message: "Invalid bill ID" });
     }
 
-    const bill = await Bill.findByIdAndDelete(req.params.id).lean();
+    const bill = await Bill.findByIdAndDelete(req.params.id).session(session);
     if (!bill) {
+      await session.abortTransaction();
       return res.status(404).json({ message: "Bill not found" });
     }
 
+    // Remove associated earnings if bill was paid
+    if (bill.status === "paid") {
+      await Earnings.deleteOne({ reference: bill._id }).session(session);
+    }
+
+    await session.commitTransaction();
     res.json({ message: "Bill deleted successfully" });
   } catch (error) {
+    await session.abortTransaction();
     console.error("Error deleting bill:", error);
     res.status(500).json({ message: "Failed to delete bill", error: error.message });
+  } finally {
+    session.endSession();
   }
 });
 
@@ -364,16 +426,12 @@ router.get("/stats", async (req, res) => {
 // Get unique party names for autocomplete
 router.get("/parties", async (req, res) => {
   try {
-    console.debug("Fetching unique party names");
     const parties = await Bill.distinct("partyName");
     if (!parties.length) {
-      console.debug("No party names found");
       return res.status(200).json([]);
     }
-    // Normalize party names for consistency
     const normalizedParties = parties.map((name) => name.toLowerCase());
     const uniqueParties = [...new Set(normalizedParties)];
-    console.debug(`Found ${uniqueParties.length} unique party names:`, uniqueParties);
     res.json(uniqueParties);
   } catch (error) {
     console.error("Error fetching party names:", error);
