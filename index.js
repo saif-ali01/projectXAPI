@@ -4,7 +4,7 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const bills = require("./routes/bills");
 const expensesRouter = require("./routes/expenses");
-const partyRoutes = require("./routes/parties"); // From previous
+const partyRoutes = require("./routes/parties");
 const dashboardRoutes = require("./routes/dashboard");
 const authRoutes = require("./routes/authRoutes");
 const reportRoutes = require("./routes/reportRoutes");
@@ -15,10 +15,21 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: "http://localhost:5173",
+  origin: "http://localhost:5173", // Update to your frontend URL in production
   credentials: false,
 }));
 app.use(express.json());
+
+// Health check endpoint
+app.get("/api/health", async (req, res) => {
+  try {
+    await mongoose.connection.db.admin().ping();
+    res.status(200).json({ status: "ok", message: "MongoDB connected" });
+  } catch (error) {
+    console.error("Health check error:", error);
+    res.status(500).json({ status: "error", message: "MongoDB connection failed" });
+  }
+});
 
 // Routes
 app.use("/api/bills", bills);
@@ -30,7 +41,12 @@ app.use("/api/reports", reportRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error("Global error:", {
+    message: err.message,
+    stack: err.stack,
+    path: req.path,
+    method: req.method,
+  });
   res.status(500).json({ message: "Server error" });
 });
 
