@@ -75,10 +75,15 @@ const billSchema = new mongoose.Schema({
     trim: true,
     default: "",
   },
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true,
+  },
 });
 
-// Indexes for performance
 billSchema.index({ serialNumber: 1 }, { unique: true });
 billSchema.index({ partyName: 1, date: -1 });
+billSchema.index({ createdBy: 1, status: 1 });
 
 module.exports = mongoose.model("Bill", billSchema);
