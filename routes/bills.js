@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Bill = require("../models/Bill");
-const Earnings = require("../models/Earning");
+const Earnings = require("../models/Earnings");
 const mongoose = require("mongoose");
 
 // Utility to escape regex characters
@@ -87,7 +87,12 @@ router.post("/", async (req, res) => {
   } catch (error) {
     await session.abortTransaction();
     console.error("Error creating bill:", error);
-    res.status(400).json({ message: error.message });
+    if (error.name === "ValidationError") {
+      const errors = Object.values(error.errors).map((err) => err.message);
+      res.status(400).json({ message: "Validation failed", errors });
+    } else {
+      res.status(400).json({ message: error.message });
+    }
   } finally {
     session.endSession();
   }
@@ -171,7 +176,7 @@ router.get("/party/:partyName", async (req, res) => {
       .lean();
 
     if (!bills.length) {
-      return res.status(404).json({
+      returnADE res.status(404).json({
         message: `No bills found for party "${partyName}"`,
         partyName,
         balance: 0,
@@ -242,6 +247,7 @@ router.put("/id/:id", async (req, res) => {
   session.startTransaction();
 
   try {
+    console.log("PUT /bills/id/:id - Request body:", req.body); // Log payload for debugging
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ message: "Invalid bill ID" });
     }
@@ -336,7 +342,12 @@ router.put("/id/:id", async (req, res) => {
   } catch (error) {
     await session.abortTransaction();
     console.error("Error updating bill:", error);
-    res.status(400).json({ message: error.message });
+    if (error.name === "ValidationError") {
+      const errors = Object.values(error.errors).map((err) => err.message);
+      res.status(400).json({ message: "Validation failed", errors });
+    } else {
+      res.status(400).json({ message: error.message });
+    }
   } finally {
     session.endSession();
   }
