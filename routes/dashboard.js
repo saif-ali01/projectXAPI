@@ -4,7 +4,7 @@ const Party = require("../models/Party");
 const authMiddleware = require("../middleware/auth");
 
 // Get all parties for the authenticated user
-router.get("/", authMiddleware, async (req, res) => {
+router.get("/",  async (req, res) => {
   try {
     const parties = await Party.find({ createdBy: req.user.id }).sort({ name: 1 });
     res.json(parties);
@@ -15,7 +15,7 @@ router.get("/", authMiddleware, async (req, res) => {
 });
 
 // Get a single party by ID
-router.get("/:id", authMiddleware, async (req, res) => {
+router.get("/:id", async (req, res) => {
   try {
     const party = await Party.findOne({
       _id: req.params.id,
@@ -32,7 +32,7 @@ router.get("/:id", authMiddleware, async (req, res) => {
 });
 
 // Create a new party
-router.post("/", authMiddleware, async (req, res) => {
+router.post("/", async (req, res) => {
   try {
     const { name, contact, address } = req.body;
     if (!name?.trim()) {
@@ -59,7 +59,7 @@ router.post("/", authMiddleware, async (req, res) => {
 });
 
 // Update a party
-router.put("/:id", authMiddleware, async (req, res) => {
+router.put("/:id",  async (req, res) => {
   try {
     const { name, contact, address } = req.body;
     if (!name?.trim()) {
@@ -92,7 +92,7 @@ router.put("/:id", authMiddleware, async (req, res) => {
 });
 
 // Delete a party
-router.delete("/:id", authMiddleware, async (req, res) => {
+router.delete("/:id",  async (req, res) => {
   try {
     const party = await Party.findOneAndDelete({
       _id: req.params.id,
