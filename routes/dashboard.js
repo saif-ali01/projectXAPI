@@ -1,7 +1,6 @@
 const express = require("express");
 const router = express.Router();
 const Party = require("../models/Party");
-const authMiddleware = require("../middleware/auth");
 
 // Get all parties for the authenticated user
 router.get("/",  async (req, res) => {
