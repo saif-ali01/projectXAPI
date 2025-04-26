@@ -1,109 +1,125 @@
+// routes/dashboard.js - Fixed Version
 const express = require("express");
 const router = express.Router();
+const Bill = require("../models/Bill");
+const Expense = require("../models/Expense");
+const Earnings = require("../models/Earnings");
 const Party = require("../models/Party");
 
-// Get all parties for the authenticated user
-router.get("/",  async (req, res) => {
-  try {
-    const parties = await Party.find({ createdBy: req.user.id }).sort({ name: 1 });
-    res.json(parties);
-  } catch (error) {
-    console.error("Error fetching parties:", error);
-    res.status(500).json({ message: "Server error" });
-  }
-});
+// Improved error handling middleware
+const handleError = (res, error, context) => {
+  console.error(`Error in ${context}:`, error);
+  res.status(500).json({ 
+    message: "Server error",
+    error: process.env.NODE_ENV === "development" ? error.message : undefined
+  });
+};
 
-// Get a single party by ID
-router.get("/:id", async (req, res) => {
+// Get dashboard summary metrics
+router.get("/summary", async (req, res) => {
   try {
-    const party = await Party.findOne({
-      _id: req.params.id,
-      createdBy: req.user.id,
+    const match = {};
+    if (req.query.userId) match.createdBy = req.query.userId;
+
+    // Validate models have required fields
+    const requiredFields = {
+      Earnings: ["amount", "createdBy"],
+      Expense: ["amount", "createdBy"],
+      Bill: ["status", "partyName", "createdBy"]
+    };
+
+    // Check if models have required fields
+    for (const [modelName, fields] of Object.entries(requiredFields)) {
+      const model = { Earnings, Expense, Bill }[modelName];
+      const instance = new model();
+      fields.forEach(field => {
+        if (!(field in instance)) throw new Error(`${modelName} model missing required field: ${field}`);
+      });
+    }
+
+    // Parallelize database calls
+    const [totalRevenue, totalExpenses, pendingInvoices, activeClients] = await Promise.all([
+      Earnings.aggregate([
+        { $match: match },
+        { $group: { _id: null, total: { $sum: "$amount" } } }
+      ]),
+      Expense.aggregate([
+        { $match: match },
+        { $group: { _id: null, total: { $sum: "$amount" } } }
+      ]),
+      Bill.countDocuments({ ...match, status: { $in: ["pending", "due"] } }),
+      Bill.aggregate([
+        { $match: match },
+        { $group: { _id: "$partyName" } },
+        { $count: "activeClients" }
+      ])
+    ]);
+
+    res.json({
+      totalRevenue: totalRevenue[0]?.total || 0,
+      totalExpenses: totalExpenses[0]?.total || 0,
+      pendingInvoices: pendingInvoices || 0,
+      activeClients: activeClients[0]?.activeClients || 0
     });
-    if (!party) {
-      return res.status(404).json({ message: "Party not found" });
-    }
-    res.json(party);
   } catch (error) {
-    console.error("Error fetching party:", error);
-    res.status(500).json({ message: "Server error" });
+    handleError(res, error, "dashboard summary");
   }
 });
 
-// Create a new party
-router.post("/", async (req, res) => {
+// Get revenue trend (monthly revenue for last 6 months)
+router.get("/revenue-trend", async (req, res) => {
   try {
-    const { name, contact, address } = req.body;
-    if (!name?.trim()) {
-      return res.status(400).json({ message: "Party name is required" });
+    const match = {};
+    if (req.query.userId) match.createdBy = req.query.userId;
+
+    // Validate date field exists in Earnings
+    if (!Earnings.schema.paths.date) {
+      throw new Error("Earnings model missing date field");
     }
 
-    const party = new Party({
-      name: name.trim(),
-      contact: contact?.trim() || "",
-      address: address?.trim() || "",
-      createdBy: req.user.id,
-    });
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-    await party.save();
-    res.status(201).json(party);
-  } catch (error) {
-    console.error("Error creating party:", error);
-    if (error.name === "ValidationError") {
-      const errors = Object.values(error.errors).map((err) => err.message);
-      return res.status(400).json({ message: "Validation failed", errors });
-    }
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-// Update a party
-router.put("/:id",  async (req, res) => {
-  try {
-    const { name, contact, address } = req.body;
-    if (!name?.trim()) {
-      return res.status(400).json({ message: "Party name is required" });
-    }
-
-    const party = await Party.findOneAndUpdate(
-      { _id: req.params.id, createdBy: req.user.id },
+    const revenueData = await Earnings.aggregate([
       {
-        name: name.trim(),
-        contact: contact?.trim() || "",
-        address: address?.trim() || "",
+        $match: {
+          ...match,
+          date: { $gte: sixMonthsAgo, $lte: new Date() }
+        }
       },
-      { new: true, runValidators: true }
-    );
+      {
+        $group: {
+          _id: {
+            year: { $year: "$date" },
+            month: { $month: "$date" }
+          },
+          revenue: { $sum: "$amount" }
+        }
+      },
+      { $sort: { "_id.year": 1, "_id.month": 1 } }
+    ]);
 
-    if (!party) {
-      return res.status(404).json({ message: "Party not found" });
-    }
-
-    res.json(party);
-  } catch (error) {
-    console.error("Error updating party:", error);
-    if (error.name === "ValidationError") {
-      const errors = Object.values(error.errors).map((err) => err.message);
-      return res.status(400).json({ message: "Validation failed", errors });
-    }
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-// Delete a party
-router.delete("/:id",  async (req, res) => {
-  try {
-    const party = await Party.findOneAndDelete({
-      _id: req.params.id,
-      createdBy: req.user.id,
+    // Generate default months array with zero values
+    const months = Array.from({ length: 6 }, (_, i) => {
+      const date = new Date();
+      date.setMonth(date.getMonth() - (5 - i));
+      return {
+        month: date.toLocaleString("en-US", { month: "short", year: "2-digit" }),
+        revenue: 0
+      };
     });
-    if (!party) {
-      return res.status(404).json({ message: "Party not found" });
-    }
-    res.json({ message: "Party deleted successfully" });
+
+    // Merge actual data into default array
+    revenueData.forEach(entry => {
+      const date = new Date(entry._id.year, entry._id.month - 1);
+      const monthStr = date.toLocaleString("en-US", { month: "short", year: "2-digit" });
+      const target = months.find(m => m.month === monthStr);
+      if (target) target.revenue = entry.revenue;
+    });
+
+    res.json(months);
   } catch (error) {
-    console.error("Error deleting party:", error);
-    res.status(500).json({ message: "Server error" });
+    handleError(res, error, "revenue trend");
   }
 });
 
