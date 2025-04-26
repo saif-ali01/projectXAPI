@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Bill = require("../models/Bill");
-const Earnings = require("../models/Earnings");
+const Earnings = require("../models/Earning");
 const mongoose = require("mongoose");
 
 // Utility to escape regex characters
