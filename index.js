@@ -15,7 +15,7 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: "http://localhost:5173", // Update to your frontend URL in production
+  origin: "*", // Update to your frontend URL in production
   credentials: false,
 }));
 app.use(express.json());
