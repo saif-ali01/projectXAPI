@@ -227,8 +227,21 @@ router.get("/earnings", async (req, res) => {
 router.post("/", async (req, res) => {
   try {
     const { date, description, category, amount, type } = req.body;
+    if (!date || !description || !category || !amount || !type) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+    const parsedDate = new Date(date);
+    if (isNaN(parsedDate)) {
+      return res.status(400).json({ message: "Invalid date format" });
+    }
+    if (isNaN(amount) || amount <= 0) {
+      return res.status(400).json({ message: "Amount must be a positive number" });
+    }
+    if (!["Personal", "Professional"].includes(type)) {
+      return res.status(400).json({ message: "Invalid type" });
+    }
     const expense = new Expense({
-      date: new Date(date),
+      date: parsedDate,
       description,
       category,
       amount,
