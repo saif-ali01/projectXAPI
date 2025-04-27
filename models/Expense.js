@@ -24,11 +24,6 @@ const expenseSchema = new mongoose.Schema({
     enum: ["Personal", "Professional"],
     required: true,
   },
-  createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-    required: true,
-  },
 });
 
 expenseSchema.index({ createdBy: 1, date: -1 });
