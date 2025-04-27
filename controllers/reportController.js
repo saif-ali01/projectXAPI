@@ -1,5 +1,5 @@
 // controllers/reportController.js
-const Transaction = require("../models/Transaction");
+const Transaction = require("../models/Expense");
 const { isValidDate } = require("../utils/helpers");
 
 const getReports = async (req, res) => {
