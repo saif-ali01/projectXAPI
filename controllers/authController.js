@@ -4,6 +4,20 @@ const PasswordResetToken = require("../models/passwordResetTokenSchema");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { sendResetEmail } = require("../config/email");
+const winston = require("winston");
+
+// Configure Winston logger
+const logger = winston.createLogger({
+  level: "error",
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.File({ filename: "logs/error.log" }),
+    new winston.transports.Console(),
+  ],
+});
 
 // Validation middleware for signup and login
 const validateAuth = (method) => {
@@ -14,7 +28,7 @@ const validateAuth = (method) => {
         body("email").isEmail().normalizeEmail().withMessage("Invalid email address"),
         body("password")
           .isLength({ min: 8 })
-          .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)( "**"?.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/)
+          .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/)
           .withMessage("Password must be at least 8 characters, including uppercase, lowercase, number, and special character"),
       ];
     case "login":
@@ -65,7 +79,7 @@ const signup = async (req, res) => {
 
     res.status(201).json({ message: "User created successfully" });
   } catch (error) {
-    console.error("Signup error:", error);
+    logger.error("Signup error", { error: error.message, stack: error.stack });
     sendError(res, 500, "Server error");
   }
 };
@@ -107,7 +121,7 @@ const login = async (req, res) => {
 
     res.json({ token });
   } catch (error) {
-    console.error("Login error:", error);
+    logger.error("Login error", { error: error.message, stack: error.stack });
     sendError(res, 500, "Server error");
   }
 };
@@ -145,7 +159,7 @@ const requestPasswordReset = async (req, res) => {
     await sendResetEmail(email, token);
     res.json({ message: "Password reset link sent" });
   } catch (error) {
-    console.error("Request password reset error:", error);
+    logger.error("Request password reset error", { error: error.message, stack: error.stack });
     sendError(res, 500, "Server error");
   }
 };
@@ -183,7 +197,7 @@ const resetPassword = async (req, res) => {
     await PasswordResetToken.deleteOne({ token });
     res.json({ message: "Password reset successfully" });
   } catch (error) {
-    console.error("Reset password error:", error);
+    logger.error("Reset password error", { error: error.message, stack: error.stack });
     sendError(res, 500, "Server error");
   }
 };
