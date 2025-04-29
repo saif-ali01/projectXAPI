@@ -64,6 +64,7 @@ const sendError = (res, status, message, details = null) => {
 const signup = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    logger.error("Signup validation failed", { errors: errors.array(), body: req.body });
     return sendError(res, 400, "Validation failed", errors.array());
   }
 
@@ -92,6 +93,7 @@ const signup = async (req, res) => {
 const login = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    logger.error("Login validation failed", { errors: errors.array(), body: req.body });
     return sendError(res, 400, "Validation failed", errors.array());
   }
 
@@ -134,6 +136,7 @@ const login = async (req, res) => {
 const requestPasswordReset = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    logger.error("Request password reset validation failed", { errors: errors.array(), body: req.body });
     return sendError(res, 400, "Validation failed", errors.array());
   }
 
@@ -172,6 +175,7 @@ const requestPasswordReset = async (req, res) => {
 const resetPassword = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    logger.error("Reset password validation failed", { errors: errors.array(), body: req.body });
     return sendError(res, 400, "Validation failed", errors.array());
   }
 

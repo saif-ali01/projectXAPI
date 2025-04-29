@@ -7,9 +7,9 @@ const {
   resetPassword,
 } = require("../controllers/authController");
 
-router.post("/signup", signup);
-router.post("/login", login);
-router.post("/reset-password", requestPasswordReset);
-router.post("/reset-password/confirm", resetPassword);
+router.post("/auth/signup", signup);
+router.post("/auth/login", login);
+router.post("/auth/reset-password", requestPasswordReset);
+router.post("/auth/reset-password/confirm", resetPassword);
 
 module.exports = router;
