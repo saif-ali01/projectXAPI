@@ -36,7 +36,7 @@ app.use("/api/bills", bills);
 app.use("/api/expenses", expensesRouter);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/parties", partyRoutes);
-app.use("/api/auth", authRoutes);
+app.use("/api", authRoutes);
 app.use("/api/reports", reportRoutes);
 
 // Error handling middleware
