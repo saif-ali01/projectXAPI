@@ -13,7 +13,7 @@ const dashboardRoutes = require("./routes/dashboard");
 const authRoutes = require("./routes/authRoutes");
 const reportRoutes = require("./routes/reportRoutes");
 
-require("./auth/google"); // Google OAuth strategy config
+require("./config/google"); // Google OAuth strategy config
 const User = require("./models/User");
 
 dotenv.config();
