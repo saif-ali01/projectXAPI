@@ -1,7 +1,8 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const dotenv = require("dotenv");
+require("dotenv").config();
+
 const session = require("express-session");
 const passport = require("passport");
 const jwt = require("jsonwebtoken");
@@ -16,7 +17,6 @@ const reportRoutes = require("./routes/reportRoutes");
 require("./config/google"); // Google OAuth strategy config
 const User = require("./models/User");
 
-dotenv.config();
 
 const app = express();
 
