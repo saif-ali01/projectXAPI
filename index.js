@@ -1,12 +1,9 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-require("dotenv").config();
-
-const session = require("express-session");
 const passport = require("passport");
 const jwt = require("jsonwebtoken");
-
+const dotenv = require("dotenv");
 const bills = require("./routes/bills");
 const expensesRouter = require("./routes/expenses");
 const partyRoutes = require("./routes/parties");
@@ -14,29 +11,22 @@ const dashboardRoutes = require("./routes/dashboard");
 const authRoutes = require("./routes/authRoutes");
 const reportRoutes = require("./routes/reportRoutes");
 
-require("./config/google"); // Google OAuth strategy config
-const User = require("./models/User");
-
+dotenv.config();
 
 const app = express();
 
 // Middleware
-app.use(cors({
-  origin: "http://localhost:3000", // Set this to your frontend URL
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: [process.env.FRONTEND_URL, "https://projectx90.netlify.app"],
+    credentials: true, // Required for HttpOnly cookies
+  })
+);
 app.use(express.json());
-
-app.use(session({
-  secret: process.env.SESSION_SECRET || "secret",
-  resave: false,
-  saveUninitialized: false,
-}));
-
 app.use(passport.initialize());
-app.use(passport.session());
+require("./config/google"); // Google OAuth config
 
-// Health check
+// Health check endpoint
 app.get("/api/health", async (req, res) => {
   try {
     await mongoose.connection.db.admin().ping();
@@ -48,31 +38,46 @@ app.get("/api/health", async (req, res) => {
 });
 
 // Google OAuth routes
-app.get("/auth/google",
+app.get(
+  "/auth/google",
   passport.authenticate("google", { scope: ["profile", "email"] })
 );
 
-app.get("/auth/google/callback",
-  passport.authenticate("google", { session: false, failureRedirect: "/login" }),
+app.get(
+  "/auth/google/callback",
+  passport.authenticate("google", {
+    session: false,
+    failureRedirect: `${process.env.FRONTEND_URL}/login?error=auth_failed`,
+  }),
   (req, res) => {
-    const token = jwt.sign(
-      { id: req.user._id, role: req.user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: "1d" }
-    );
-    res.redirect(`http://localhost:5173/oauth-success?token=${token}`);
+    try {
+      const token = jwt.sign(
+        { id: req.user._id, role: req.user.role },
+        process.env.JWT_SECRET,
+        { expiresIn: "1d" }
+      );
+      res.cookie("authToken", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        maxAge: 24 * 60 * 60 * 1000, // 1 day
+      });
+      res.redirect(`${process.env.FRONTEND_URL}/`);
+    } catch (err) {
+      res.redirect(`${process.env.FRONTEND_URL}/login?error=auth_failed`);
+    }
   }
 );
 
 // Routes
 app.use("/api/bills", bills);
 app.use("/api/expenses", expensesRouter);
-app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/parties", partyRoutes);
-app.use("/api", authRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/reports", reportRoutes);
+app.use("/api", authRoutes);
 
-// Global error handler
+// Error handling middleware
 app.use((err, req, res, next) => {
   console.error("Global error:", {
     message: err.message,
@@ -83,7 +88,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: "Server error" });
 });
 
-// Connect to MongoDB and start server
+// Connect to MongoDB
 mongoose
   .connect(process.env.MONGODB_URI, {
     useNewUrlParser: true,

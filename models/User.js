@@ -6,7 +6,7 @@ const userSchema = new mongoose.Schema({
   email: { type: String, unique: true },
   password: { type: String, select: false },
   role: { type: String, default: "user" },
-  isGoogleUser: { type: Boolean, default: false }
+  isGoogleUser: { type: Boolean, default: false },
 });
 
 userSchema.pre("save", async function (next) {
