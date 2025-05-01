@@ -18,7 +18,7 @@ const app = express();
 // Middleware
 app.use(
   cors({
-    origin: [process.env.FRONTEND_URL, "https://projectx90.netlify.app"],
+    origin: ["http://localhost:5173", "https://projectx90.netlify.app"],
     credentials: true,
   })
 );
