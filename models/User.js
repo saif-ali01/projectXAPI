@@ -7,6 +7,7 @@ const userSchema = new mongoose.Schema({
   password: { type: String, select: false },
   role: { type: String, default: "user" },
   isGoogleUser: { type: Boolean, default: false },
+  refreshToken: { type: String }, // Added for refresh token
   resetPasswordToken: String,
   resetPasswordExpires: Date,
 });

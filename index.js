@@ -4,6 +4,8 @@ const cors = require("cors");
 const passport = require("passport");
 const jwt = require("jsonwebtoken");
 const dotenv = require("dotenv");
+const cookieParser = require("cookie-parser");
+const User = require("./models/User");
 const bills = require("./routes/bills");
 const expensesRouter = require("./routes/expenses");
 const partyRoutes = require("./routes/parties");
@@ -13,20 +15,55 @@ const reportRoutes = require("./routes/reportRoutes");
 
 dotenv.config();
 
+console.log("Environment variables:", {
+  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+  GOOGLE_CALLBACK_URL: process.env.GOOGLE_CALLBACK_URL,
+  FRONTEND_URL: process.env.FRONTEND_URL,
+  JWT_SECRET: process.env.JWT_SECRET,
+  MONGODB_URI: process.env.MONGODB_URI ? "Set" : "Not set",
+});
+
 const app = express();
 
-// Middleware
+app.use(cookieParser());
 app.use(
   cors({
-    origin: ["http://localhost:5173", "https://projectx90.netlify.app"],
+    origin: [
+      process.env.FRONTEND_URL,
+      "https://projectx90.netlify.app",
+      "http://localhost:5173",
+    ],
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 app.use(express.json());
 app.use(passport.initialize());
 require("./config/google");
 
-// Health check endpoint
+const protect = async (req, res, next) => {
+  try {
+    const token = req.cookies.authToken;
+    if (!token) {
+      return res.status(401).json({ message: "No token provided" });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id).select("-password");
+    if (!user) {
+      return res.status(401).json({ message: "User not found" });
+    }
+
+    req.user = user;
+    next();
+  } catch (err) {
+    console.error("JWT verification error:", err);
+    res.status(401).json({ message: "Invalid token" });
+  }
+};
+
 app.get("/api/health", async (req, res) => {
   try {
     await mongoose.connection.db.admin().ping();
@@ -37,7 +74,21 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
-// Google OAuth routes
+// /api/me endpoint
+app.get("/api/me", protect, async (req, res) => {
+  try {
+    res.json({
+      id: req.user._id,
+      email: req.user.email,
+      name: req.user.name,
+      role: req.user.role,
+    });
+  } catch (err) {
+    console.error("Get user error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 app.get(
   "/auth/google",
   (req, res, next) => {
@@ -52,37 +103,119 @@ app.get(
     session: false,
     failureRedirect: `${process.env.FRONTEND_URL}/signup?error=auth_failed`,
   }),
-  (req, res) => {
+  async (req, res) => {
     try {
       console.log("Google callback processed, user:", req.user.email);
+
+      if (!process.env.JWT_SECRET) {
+        throw new Error("JWT_SECRET is not defined");
+      }
       const token = jwt.sign(
-        { id: req.user._id, role: req.user.role },
+        { id: req.user._id, role: req.user.role, email: req.user.email },
         process.env.JWT_SECRET,
-        { expiresIn: "1d" }
+        { expiresIn: "1h" }
       );
+
+      const refreshToken = jwt.sign(
+        { id: req.user._id },
+        process.env.JWT_SECRET,
+        { expiresIn: "7d" }
+      );
+
+      req.user.refreshToken = refreshToken;
+      await req.user.save();
+
       res.cookie("authToken", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "strict",
-        maxAge: 24 * 60 * 60 * 1000,
+        maxAge: 60 * 60 * 1000,
       });
+
+      res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+
       res.redirect(`${process.env.FRONTEND_URL}/`);
     } catch (err) {
-      console.error("Google callback error:", err);
+      console.error("Google callback error:", {
+        message: err.message,
+        stack: err.stack,
+      });
       res.redirect(`${process.env.FRONTEND_URL}/signup?error=auth_failed`);
     }
   }
 );
 
-// Routes
-app.use("/api/bills", bills);
-app.use("/api/expenses", expensesRouter);
-app.use("/api/parties", partyRoutes);
-app.use("/api/dashboard", dashboardRoutes);
-app.use("/api/reports", reportRoutes);
+app.post("/api/refresh-token", async (req, res) => {
+  try {
+    const refreshToken = req.cookies.refreshToken;
+    if (!refreshToken) {
+      return res.status(401).json({ message: "No refresh token provided" });
+    }
+
+    const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id);
+    if (!user || user.refreshToken !== refreshToken) {
+      return res.status(401).json({ message: "Invalid refresh token" });
+    }
+
+    const newToken = jwt.sign(
+      { id: user._id, role: user.role, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+
+    res.cookie("authToken", newToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 60 * 60 * 1000,
+    });
+
+    res.json({ message: "Token refreshed" });
+  } catch (err) {
+    console.error("Refresh token error:", err);
+    res.status(401).json({ message: "Invalid refresh token" });
+  }
+});
+
+app.post("/api/logout", async (req, res) => {
+  try {
+    const refreshToken = req.cookies.refreshToken;
+    if (refreshToken) {
+      await User.findOneAndUpdate(
+        { refreshToken },
+        { $unset: { refreshToken: "" } }
+      );
+    }
+    res.clearCookie("authToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+    });
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+    });
+    res.json({ message: "Logged out successfully" });
+  } catch (err) {
+    console.error("Logout error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+app.use("/api/bills", protect, bills);
+app.use("/api/expenses", protect, expensesRouter);
+app.use("/api/parties", protect, partyRoutes);
+app.use("/api/dashboard", protect, dashboardRoutes);
+app.use("/api/reports", protect, reportRoutes);
 app.use("/api", authRoutes);
 
-// Error handling middleware
 app.use((err, req, res, next) => {
   console.error("Global error:", {
     message: err.message,
@@ -93,7 +226,6 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: "Server error" });
 });
 
-// Connect to MongoDB
 mongoose
   .connect(process.env.MONGODB_URI, {
     useNewUrlParser: true,
