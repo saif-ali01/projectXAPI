@@ -19,12 +19,12 @@ const app = express();
 app.use(
   cors({
     origin: [process.env.FRONTEND_URL, "https://projectx90.netlify.app"],
-    credentials: true, // Required for HttpOnly cookies
+    credentials: true,
   })
 );
 app.use(express.json());
 app.use(passport.initialize());
-require("./config/google"); // Google OAuth config
+require("./config/google");
 
 // Health check endpoint
 app.get("/api/health", async (req, res) => {
@@ -40,17 +40,21 @@ app.get("/api/health", async (req, res) => {
 // Google OAuth routes
 app.get(
   "/auth/google",
-  passport.authenticate("google", { scope: ["profile", "email"] })
+  (req, res, next) => {
+    console.log("Initiating Google OAuth, redirect URI:", process.env.GOOGLE_CALLBACK_URL);
+    passport.authenticate("google", { scope: ["profile", "email"] })(req, res, next);
+  }
 );
 
 app.get(
   "/auth/google/callback",
   passport.authenticate("google", {
     session: false,
-    failureRedirect: `${process.env.FRONTEND_URL}/login?error=auth_failed`,
+    failureRedirect: `${process.env.FRONTEND_URL}/signup?error=auth_failed`,
   }),
   (req, res) => {
     try {
+      console.log("Google callback processed, user:", req.user.email);
       const token = jwt.sign(
         { id: req.user._id, role: req.user.role },
         process.env.JWT_SECRET,
@@ -60,11 +64,12 @@ app.get(
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "strict",
-        maxAge: 24 * 60 * 60 * 1000, // 1 day
+        maxAge: 24 * 60 * 60 * 1000,
       });
       res.redirect(`${process.env.FRONTEND_URL}/`);
     } catch (err) {
-      res.redirect(`${process.env.FRONTEND_URL}/login?error=auth_failed`);
+      console.error("Google callback error:", err);
+      res.redirect(`${process.env.FRONTEND_URL}/signup?error=auth_failed`);
     }
   }
 );
