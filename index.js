@@ -16,11 +16,11 @@ const reportRoutes = require("./routes/reportRoutes");
 dotenv.config();
 
 console.log("Environment variables:", {
-  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
-  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID ? "Set" : "Not set",
+  GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET ? "Set" : "Not set",
   GOOGLE_CALLBACK_URL: process.env.GOOGLE_CALLBACK_URL,
   FRONTEND_URL: process.env.FRONTEND_URL,
-  JWT_SECRET: process.env.JWT_SECRET,
+  JWT_SECRET: process.env.JWT_SECRET ? "Set" : "Not set",
   MONGODB_URI: process.env.MONGODB_URI ? "Set" : "Not set",
 });
 
@@ -31,7 +31,7 @@ app.use(
   cors({
     origin: [
       process.env.FRONTEND_URL,
-      "https://projectx600.netlify.app",
+      "https://projectx90.netlify.app",
       "http://localhost:5173",
     ],
     credentials: true,
@@ -42,6 +42,11 @@ app.use(
 app.use(express.json());
 app.use(passport.initialize());
 require("./config/google");
+
+// Root route to prevent 404
+app.get("/", (req, res) => {
+  res.status(200).json({ message: "ProjectX API is running" });
+});
 
 const protect = async (req, res, next) => {
   try {
@@ -145,7 +150,7 @@ app.get(
         message: err.message,
         stack: err.stack,
       });
-      res.redirect(`${process.env.FRONTEND_URL}/signup?error=auth_failed`);
+      res.redirect(`${process.env.FRONTEND_URL}/signup?error=server_error`);
     }
   }
 );
@@ -226,17 +231,30 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: "Server error" });
 });
 
-mongoose
-  .connect(process.env.MONGODB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
-  .then(() => {
-    console.log("Connected to MongoDB");
-    const PORT = process.env.PORT || 5000;
-    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-  })
-  .catch((err) => {
-    console.error("MongoDB connection error:", err);
-    process.exit(1);
-  });
+// MongoDB connection with retry
+const connectWithRetry = async () => {
+  let retries = 5;
+  while (retries) {
+    try {
+      await mongoose.connect(process.env.MONGODB_URI, {
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+      });
+      console.log("Connected to MongoDB");
+      return;
+    } catch (err) {
+      console.error(`MongoDB connection error (${retries} retries left):`, err);
+      retries -= 1;
+      if (retries === 0) {
+        console.error("MongoDB connection failed after retries");
+        process.exit(1);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+    }
+  }
+};
+
+connectWithRetry();
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
