@@ -1,13 +1,13 @@
-import express from "express";
-import mongoose from "mongoose";
-import cors from "cors";
-import passport from "passport";
-import { Strategy as GoogleStrategy } from "passport-google-oauth20";
-import jwt from "jsonwebtoken";
-import cookieParser from "cookie-parser";
-import dotenv from "dotenv";
-import userRoutes from "./routes/User.js";
-import billRoutes from "./routes/bills.js";
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+const passport = require("passport");
+const { Strategy: GoogleStrategy } = require("passport-google-oauth20");
+const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
+const dotenv = require("dotenv");
+const userRoutes = require("./routes/User.js");
+const billRoutes = require("./routes/bills.js");
 
 dotenv.config();
 
