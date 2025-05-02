@@ -6,7 +6,7 @@ const { Strategy: GoogleStrategy } = require("passport-google-oauth20");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
 const dotenv = require("dotenv");
-const userRoutes = require("./routes/User.js");
+const userRoutes = require("./routes/authRoutes.js");
 const billRoutes = require("./routes/bills.js");
 
 dotenv.config();
