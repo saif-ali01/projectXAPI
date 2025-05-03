@@ -57,7 +57,7 @@ app.get("/favicon.ico", (req, res) => {
 app.get(
   "/auth/google",
   (req, res, next) => {
-    console.log("Hit /auth/google, redirect URI:", process.env.GOOGLE_CALLBACK_URL);
+    console.log("Hit /auth/google, redirect URI:", process.env.FRONTEND_URL);
     passport.authenticate("google", { scope: ["profile", "email"] })(req, res, next);
   }
 );
