@@ -38,9 +38,9 @@ const validate = (req, res, next) => {
 };
 
 // Routes
-router.post('/', authMiddleware, validateClient, validate, clientController.createClient);
-router.get('/', authMiddleware, validateQuery, validate, clientController.getClients);
-router.put('/:id', authMiddleware, validateId, validateClient, validate, clientController.updateClient);
-router.delete('/:id', authMiddleware, validateId, validate, clientController.deleteClient);
+router.post('/', validateClient, validate, clientController.createClient);
+router.get('/',  validateQuery, validate, clientController.getClients);
+router.put('/:id',  validateId, validateClient, validate, clientController.updateClient);
+router.delete('/:id',  validateId, validate, clientController.deleteClient);
 
 module.exports = router;
