@@ -7,6 +7,7 @@ const dotenv = require("dotenv");
 const cookieParser = require("cookie-parser");
 const User = require("./models/User");
 const bills = require("./routes/bills");
+const clientRoutes = require('./routes/clientRoutes');
 const expensesRouter = require("./routes/expenses");
 const partyRoutes = require("./routes/parties");
 const dashboardRoutes = require("./routes/dashboard");
@@ -263,6 +264,7 @@ app.use("/api/parties", protect, partyRoutes);
 app.use("/api/dashboard", protect, dashboardRoutes);
 app.use("/api/reports", protect, reportRoutes);
 app.use("/api", authRoutes);
+app.use('/api/clients', clientRoutes);
 
 // Catch-all route for debugging
 app.use((req, res) => {
