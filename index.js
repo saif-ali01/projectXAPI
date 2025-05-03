@@ -260,7 +260,7 @@ app.post("/api/logout", async (req, res) => {
 app.use("/api/bills", protect, bills);
 app.use("/api/expenses", protect, expensesRouter);
 app.use("/api/parties", protect, partyRoutes);
-app.use("/dashboard", protect, dashboardRoutes);
+app.use("/api/dashboard", protect, dashboardRoutes);
 app.use("/api/reports", protect, reportRoutes);
 app.use("/api", authRoutes);
 
