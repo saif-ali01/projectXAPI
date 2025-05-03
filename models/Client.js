@@ -25,10 +25,10 @@ const clientSchema = new mongoose.Schema({
     required: [true, 'Phone number is required'],
     trim: true,
     validate: {
-      validator: function (value) {
-        return validator.isMobilePhone(value, 'any', { strictMode: false });
+      validator: function (v) {
+        return /\+?[0-9]{7,15}/.test(v); // Adjust regex as needed for phone validation
       },
-      message: 'Invalid phone number',
+      message: 'Invalid phone number format',
     },
   },
   createdBy: {
