@@ -108,19 +108,20 @@ app.get(
       await req.user.save();
       res.cookie("authToken", token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
+        secure: true, // Must be true in production
+        sameSite: "none", // Required for cross-domain cookies
         maxAge: 60 * 60 * 1000,
       });
+      
       res.cookie("refreshToken", refreshToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
+        secure: true,
+        sameSite: "none",
         maxAge: 7 * 24 * 60 * 60 * 1000,
       });
       console.log("Redirecting to:", `${process.env.FRONTEND_URL}/`);
       res.redirect(`${process.env.FRONTEND_URL}/`);
-    } catch (err) {
+    } catch (err) { 
       console.error("Google callback error:", {
         message: err.message,
         stack: err.stack,
@@ -140,23 +141,38 @@ app.get("/", (req, res) => {
 // Authentication middleware
 const protect = async (req, res, next) => {
   try {
-    const token = req.cookies.authToken;
+    // Debug logging
+    console.log('Received cookies:', req.cookies);
+    
+    const token = req.cookies.authToken || req.headers.authorization?.split(' ')[1];
+    
     if (!token) {
+      console.log('No token found');
       return res.status(401).json({ message: "No token provided" });
     }
+
+    // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id).select("-password");
+    console.log('Decoded token:', decoded);
+
+    // Find user with refresh token validation
+    const user = await User.findOne({
+      _id: decoded.id,
+      refreshToken: { $exists: true }
+    }).select("-password");
+
     if (!user) {
-      return res.status(401).json({ message: "User not found" });
+      console.log('User not found with valid refresh token');
+      return res.status(401).json({ message: "User session expired" });
     }
+
     req.user = user;
     next();
   } catch (err) {
-    console.error("JWT verification error:", err);
+    console.error('JWT Error:', err.message);
     res.status(401).json({ message: "Invalid token" });
   }
 };
-
 // Health check
 app.get("/api/health", async (req, res) => {
   try {
