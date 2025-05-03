@@ -45,7 +45,19 @@ app.use(
 );
 app.use(express.json());
 app.use(passport.initialize());
-require("./config/google");
+console.log("Passport initialized");
+try {
+  require("./config/google");
+  console.log("Google Strategy loaded");
+} catch (err) {
+  console.error("Failed to load Google Strategy:", err);
+}
+
+// Log all incoming requests for debugging
+app.use((req, res, next) => {
+  console.log(`Request: ${req.method} ${req.url}`);
+  next();
+});
 
 // Handle favicon.ico to prevent 404
 app.get("/favicon.ico", (req, res) => {
@@ -57,7 +69,11 @@ app.get("/favicon.ico", (req, res) => {
 app.get(
   "/auth/google",
   (req, res, next) => {
-    console.log("Hit /auth/google, redirect URI:", process.env.FRONTEND_URL);
+    console.log("Hit /auth/google, redirect URI:", process.env.GOOGLE_CALLBACK_URL);
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+      console.error("Google OAuth misconfigured: Missing client ID or secret");
+      return res.status(500).json({ message: "Server configuration error" });
+    }
     passport.authenticate("google", { scope: ["profile", "email"] })(req, res, next);
   }
 );
@@ -93,15 +109,16 @@ app.get(
       res.cookie("authToken", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "lax", // Adjusted for cross-site redirects
-        maxAge: 60 * 60 * 1000, // 1 hour
+        sameSite: "lax",
+        maxAge: 60 * 60 * 1000,
       });
       res.cookie("refreshToken", refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        maxAge: 7 * 24 * 60 * 60 * 1000,
       });
+      console.log("Redirecting to:", `${process.env.FRONTEND_URL}/`);
       res.redirect(`${process.env.FRONTEND_URL}/`);
     } catch (err) {
       console.error("Google callback error:", {
@@ -187,7 +204,7 @@ app.post("/api/refresh-token", async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 60 * 60 * 1000, // 1 hour
+      maxAge: 60 * 60 * 1000,
     });
     res.json({ message: "Token refreshed" });
   } catch (err) {
@@ -230,6 +247,12 @@ app.use("/api/parties", protect, partyRoutes);
 app.use("/api/dashboard", protect, dashboardRoutes);
 app.use("/api/reports", protect, reportRoutes);
 app.use("/api", authRoutes);
+
+// Catch-all route for debugging
+app.use((req, res) => {
+  console.log("Unhandled route:", req.method, req.url);
+  res.status(404).json({ message: "Route not found" });
+});
 
 // Global error handler
 app.use((err, req, res, next) => {
