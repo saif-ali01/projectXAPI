@@ -31,7 +31,7 @@ app.use(
   cors({
     origin: [
       process.env.FRONTEND_URL,
-      "https://projectx90.netlify.app",
+      "https://projectx600.netlify.app",
       "http://localhost:5173",
     ],
     credentials: true,
