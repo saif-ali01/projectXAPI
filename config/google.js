@@ -12,11 +12,18 @@ passport.use(
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
+        console.log("Google OAuth profile received:", {
+          id: profile.id,
+          displayName: profile.displayName,
+          emails: profile.emails,
+        });
         // Validate profile data
         if (!profile.emails || !profile.emails[0]?.value) {
+          console.error("Google OAuth error: No email provided");
           return done(new Error("No email provided by Google"), null);
         }
         if (!profile.displayName) {
+          console.error("Google OAuth error: No display name provided");
           return done(new Error("No display name provided by Google"), null);
         }
 
@@ -24,14 +31,14 @@ passport.use(
         let user = await User.findOne({ email: profile.emails[0].value });
 
         if (user) {
-          // Update existing user
+          console.log("Existing user found:", user.email);
           user.name = profile.displayName;
           user.isGoogleUser = true;
           await user.save();
           return done(null, user);
         }
 
-        // Create new user
+        console.log("Creating new user:", profile.emails[0].value);
         user = new User({
           name: profile.displayName,
           email: profile.emails[0].value,
@@ -39,9 +46,13 @@ passport.use(
           role: "user",
         });
         await user.save();
+        console.log("New user created:", user.email);
         return done(null, user);
       } catch (err) {
-        console.error("Google Strategy error:", err);
+        console.error("Google Strategy error:", {
+          message: err.message,
+          stack: err.stack,
+        });
         return done(err, null);
       }
     }
@@ -50,6 +61,7 @@ passport.use(
 
 // Serialize user to store in session
 passport.serializeUser((user, done) => {
+  console.log("Serializing user:", user.id);
   done(null, user.id);
 });
 
@@ -57,8 +69,10 @@ passport.serializeUser((user, done) => {
 passport.deserializeUser(async (id, done) => {
   try {
     const user = await User.findById(id);
+    console.log("Deserializing user:", user ? user.email : "Not found");
     done(null, user);
   } catch (err) {
+    console.error("Deserialize error:", err);
     done(err, null);
   }
 });
