@@ -12,7 +12,6 @@ const createClient = asyncHandler(async (req, res) => {
     name,
     email,
     phone,
-    createdBy: req.user._id,
   });
 
   res.status(201).json({
@@ -35,7 +34,6 @@ const getClients = asyncHandler(async (req, res) => {
   const limitNumber = parseInt(limit, 10);
 
   const query = {
-    createdBy: req.user._id,
     $or: [
       { name: { $regex: search, $options: 'i' } },
       { email: { $regex: search, $options: 'i' } },
