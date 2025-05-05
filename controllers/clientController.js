@@ -70,7 +70,7 @@ const updateClient = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { name, email, phone } = req.body;
 
-  const client = await Client.findOne({ _id: id, createdBy: req.user._id });
+  const client = await Client.findOne({ _id: id});
 
   if (!client) {
     throw createError(404, 'Client not found');
@@ -101,7 +101,6 @@ const deleteClient = asyncHandler(async (req, res) => {
 
   const client = await Client.findOneAndDelete({
     _id: id,
-    createdBy: req.user._id,
   });
 
   if (!client) {
