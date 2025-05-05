@@ -34,7 +34,6 @@ const clientSchema = new mongoose.Schema({
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: [true, 'Creator is required'],
   },
   createdAt: {
     type: Date,
