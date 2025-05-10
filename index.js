@@ -264,9 +264,9 @@ app.use("/api/parties", protect, partyRoutes);
 app.use("/api/dashboard", protect, dashboardRoutes);
 app.use("/api/reports", protect, reportRoutes);
 app.use("/api", authRoutes);
-app.use('/api/clients', clientRoutes);
-app.use("/api/works",  require("./routes/workRoutes"));
-app.use("/api/earnings", require("./routes/earnings"));
+app.use('/api/clients',protect, clientRoutes);
+app.use("/api/works",protect,  require("./routes/workRoutes"));
+app.use("/api/earnings",protect, require("./routes/earnings"));
 
 // Catch-all route for debugging
 app.use((req, res) => {
