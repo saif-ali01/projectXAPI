@@ -267,7 +267,7 @@ app.use("/api", authRoutes);
 app.use('/api/clients',protect, clientRoutes);
 app.use("/api/works",protect,  require("./routes/workRoutes"));
 app.use("/api/earnings",protect, require("./routes/earnings"));
-
+app.use("/api/budget",protect, require("./routes/budget"));
 // Catch-all route for debugging
 app.use((req, res) => {
   console.log("Unhandled route:", req.method, req.url);

@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const Expense = require("../models/Expense");
 const Earnings = require("../models/Earning");
+const moment = require("moment-timezone");
 
 // Get expense summary
 router.get("/summary", async (req, res) => {
@@ -10,8 +11,16 @@ router.get("/summary", async (req, res) => {
     const match = { type: { $in: ["Personal", "Professional"] } };
     if (startDate && endDate) {
       match.date = { $gte: new Date(startDate), $lte: new Date(endDate) };
+    } else {
+      // Default to current month
+      const now = moment().tz("Asia/Kolkata");
+      match.date = {
+        $gte: now.clone().startOf("month").toDate(),
+        $lte: now.clone().endOf("month").toDate(),
+      };
     }
 
+    // Fetch expenses summary
     const summary = await Expense.aggregate([
       { $match: match },
       {
@@ -24,9 +33,18 @@ router.get("/summary", async (req, res) => {
 
     const totalPersonal = summary.find((s) => s._id === "Personal")?.total || 0;
     const totalProfessional = summary.find((s) => s._id === "Professional")?.total || 0;
-    const totalBudget = 200000; // Example budget
-    const budgetUsed = ((totalPersonal + totalProfessional) / totalBudget) * 100;
 
+    // Fetch monthly budget for budget used calculation
+    const budgetResponse = await Earnings.find({
+      source: "Work",
+      date: { $gte: match.date.$gte, $lte: match.date.$lte },
+    });
+    const totalEarnings = budgetResponse.reduce((sum, e) => sum + e.amount, 0);
+    const totalExpenses = totalPersonal + totalProfessional;
+    const monthlyBudget = totalEarnings - totalExpenses;
+    const budgetUsed = totalEarnings > 0 ? (totalExpenses / totalEarnings) * 100 : 0;
+
+    // Fetch highest category
     const highestCategory = await Expense.aggregate([
       { $match: match },
       {
@@ -192,14 +210,12 @@ router.get("/transactions", async (req, res) => {
 router.get("/earnings", async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
-    const query = {};
+    const query = { source: "Work" }; // Filter by Work source
     if (startDate && endDate) {
       query.date = { $gte: new Date(startDate), $lte: new Date(endDate) };
     }
 
-    const earnings = await Earnings.find(query)
-      .populate("reference", "serialNumber partyName total")
-      .lean();
+    const earnings = await Earnings.find(query).lean();
 
     res.json(
       earnings.map((e) => ({
@@ -208,13 +224,7 @@ router.get("/earnings", async (req, res) => {
         amount: e.amount,
         type: e.type,
         source: e.source,
-        bill: e.reference
-          ? {
-              serialNumber: e.reference.serialNumber,
-              partyName: e.reference.partyName,
-              total: e.reference.total,
-            }
-          : null,
+        reference: e.reference,
       }))
     );
   } catch (error) {
@@ -240,12 +250,16 @@ router.post("/", async (req, res) => {
     if (!["Personal", "Professional"].includes(type)) {
       return res.status(400).json({ message: "Invalid type" });
     }
+    if (!["Food", "Travel", "Equipment", "Other"].includes(category)) {
+      return res.status(400).json({ message: "Invalid category" });
+    }
     const expense = new Expense({
       date: parsedDate,
       description,
       category,
       amount,
       type,
+      createdBy: null, // Replace with req.user._id if authenticated
     });
     const savedExpense = await expense.save();
     res.status(201).json(savedExpense);
@@ -267,8 +281,9 @@ router.put("/:id", async (req, res) => {
         category,
         amount,
         type,
+        createdBy: null, // Replace with req.user._id if authenticated
       },
-      { new: true }
+      { new: true, runValidators: true }
     );
     if (!expense) {
       return res.status(404).json({ message: "Expense not found" });
@@ -298,12 +313,16 @@ router.delete("/:id", async (req, res) => {
 router.post("/earnings", async (req, res) => {
   try {
     const { date, amount, type, source, reference } = req.body;
+    if (!date || !amount || !type || !source) {
+      return res.status(400).json({ message: "Date, amount, type, and source are required" });
+    }
     const earnings = new Earnings({
       date: new Date(date),
       amount,
       type,
       source,
       reference,
+      createdBy: null, // Replace with req.user._id if authenticated
     });
     const savedEarnings = await earnings.save();
     res.status(201).json(savedEarnings);
