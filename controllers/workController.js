@@ -1,6 +1,6 @@
 const Work = require("../models/Work");
 const Client = require("../models/Client");
-const Earnings = require("../models/Earnings"); // Import Earnings model
+const Earnings = require("../models/Earning"); // Import Earnings model
 const asyncHandler = require("express-async-handler");
 const createError = require("http-errors");
 const moment = require("moment-timezone");

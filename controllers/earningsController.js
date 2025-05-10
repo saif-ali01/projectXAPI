@@ -1,4 +1,4 @@
-const Earnings = require("../models/Earnings");
+const Earnings = require("../models/Earning");
 const asyncHandler = require("express-async-handler");
 
 const getEarnings = asyncHandler(async (req, res) => {
