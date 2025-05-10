@@ -1,6 +1,6 @@
-const Client = require('../models/Client');
-const asyncHandler = require('express-async-handler');
-const createError = require('http-errors');
+const Client = require("../models/Client");
+const asyncHandler = require("express-async-handler");
+const createError = require("http-errors");
 
 // @desc    Create a new client
 // @route   POST /api/clients
@@ -29,38 +29,45 @@ const createClient = asyncHandler(async (req, res) => {
 // @route   GET /api/clients
 // @access  Private
 const getClients = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10, search = '' } = req.query;
+  const { page = 1, limit = 10, search = "" } = req.query;
   const pageNumber = parseInt(page, 10);
   const limitNumber = parseInt(limit, 10);
 
-  const query = {
-    $or: [
-      { name: { $regex: search, $options: 'i' } },
-      { email: { $regex: search, $options: 'i' } },
-    ],
-  };
+  const query = {};
 
-  const clients = await Client.find(query)
-    .select('name email phone')
-    .skip((pageNumber - 1) * limitNumber)
-    .limit(limitNumber)
-    .lean();
+  if (search) {
+    query.$or = [
+      { name: { $regex: search, $options: "i" } },
+      { email: { $regex: search, $options: "i" } },
+    ];
+  }
 
-  const total = await Client.countDocuments(query);
+  try {
+    const clients = await Client.find(query)
+      .select("name email phone")
+      .skip((pageNumber - 1) * limitNumber)
+      .limit(limitNumber)
+      .lean();
 
-  res.status(200).json({
-    success: true,
-    data: {
-      clients: clients.map((client) => ({
-        id: client._id,
-        name: client.name,
-        email: client.email,
-        phone: client.phone,
-      })),
-      totalPages: Math.ceil(total / limitNumber),
-      currentPage: pageNumber,
-    },
-  });
+    const total = await Client.countDocuments(query);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        clients: clients.map((client) => ({
+          id: client._id,
+          name: client.name,
+          email: client.email,
+          phone: client.phone,
+        })),
+        totalPages: Math.ceil(total / limitNumber),
+        currentPage: pageNumber,
+      },
+    });
+  } catch (error) {
+    console.error("Get clients error:", error);
+    throw createError(500, "Failed to fetch clients");
+  }
 });
 
 // @desc    Update a client
@@ -70,10 +77,10 @@ const updateClient = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { name, email, phone } = req.body;
 
-  const client = await Client.findOne({ _id: id});
+  const client = await Client.findOne({ _id: id });
 
   if (!client) {
-    throw createError(404, 'Client not found');
+    throw createError(404, "Client not found");
   }
 
   client.name = name || client.name;
@@ -104,12 +111,12 @@ const deleteClient = asyncHandler(async (req, res) => {
   });
 
   if (!client) {
-    throw createError(404, 'Client not found');
+    throw createError(404, "Client not found");
   }
 
   res.status(200).json({
     success: true,
-    message: 'Client deleted successfully',
+    message: "Client deleted successfully",
   });
 });
 
