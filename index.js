@@ -174,6 +174,27 @@ const protect = async (req, res, next) => {
     res.status(401).json({ message: "Invalid token" });
   }
 };
+
+// Admin protection middleware
+const adminProtect = (req, res, next) => {
+  if (req.user.role === 'admin') {
+    next();
+  } else {
+    res.status(403).json({ message: "Forbidden: Admin access required" });
+  }
+};
+
+// Example admin-only route (add this in server.js)
+app.get('/api/admin/users', protect, adminProtect, async (req, res) => {
+  try {
+    const users = await User.find().select('-password -refreshToken');
+    res.json(users);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Health check
 app.get("/api/health", async (req, res) => {
   try {
@@ -258,16 +279,16 @@ app.post("/api/logout", async (req, res) => {
 });
 
 // Protected routes
-app.use("/api/bills", protect, bills);
-app.use("/api/expenses",  expensesRouter);
-app.use("/api/parties", protect, partyRoutes);
-app.use("/api/dashboard",  dashboardRoutes);
-app.use("/api/reports", protect, reportRoutes);
+app.use("/api/bills", protect,adminProtect, bills);
+app.use("/api/expenses",protect, adminProtect, expensesRouter);
+app.use("/api/parties", protect,adminProtect, partyRoutes);
+app.use("/api/dashboard",protect,adminProtect, dashboardRoutes);
+app.use("/api/reports", protect,adminProtect, reportRoutes);
 app.use("/api", authRoutes);
-app.use('/api/clients',protect, clientRoutes);
-app.use("/api/works",protect,  require("./routes/workRoutes"));
-app.use("/api/earnings", require("./routes/earnings"));
-app.use("/api/budget",protect, require("./routes/budget"));
+app.use('/api/clients',protect,adminProtect, clientRoutes);
+app.use("/api/works",protect, adminProtect, require("./routes/workRoutes"));
+app.use("/api/earnings",protect, adminProtect, require("./routes/earnings"));
+app.use("/api/budget",protect, adminProtect, require("./routes/budget"));
 // Catch-all route for debugging
 app.use((req, res) => {
   console.log("Unhandled route:", req.method, req.url);
